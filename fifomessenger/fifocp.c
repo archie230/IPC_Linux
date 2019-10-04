@@ -12,16 +12,15 @@
 
 #define PERM_MASK 0644
 #define BUF_SIZE PIPE_BUF
-#define TIME_LIMIT 4
+#define TIME_LIMIT 2
 
 #ifdef _DEBUG
 #define PRINTF printf
 #else
-#define PRINTF(args, ...)
+#define PRINTF(...)
 #endif
 
 const char g_service_fifo[] = "SERVICE_FIFO";
-
 
 //sending message
 void server(const char*);
@@ -30,7 +29,6 @@ void client();
 int open_service_fifo(int);
 int get_namecode(int);
 void send_namecode(pid_t, int);
-void set_datafifo_name(pid_t, char*);
 
 int main(int argc, char* argv[]) {
     switch(argc) {
@@ -56,11 +54,11 @@ void server(const char* src) {
         exit(EXIT_FAILURE);
     }
 
-    int srv_fifo_fd = open_service_fifo(O_RDONLY); // O_RDWR ?? O_RDONLY
+    int srv_fifo_fd = open_service_fifo(O_RDWR);
     int pid = get_namecode(srv_fifo_fd);
 
     char data_fifo[64] = {};
-    set_datafifo_name(pid, data_fifo);
+    sprintf(data_fifo, "DATA_FIFO_%d", pid);
 
     PRINTF("name: %s\n", data_fifo);
 
@@ -99,7 +97,7 @@ void client() {
     pid_t pid = getpid();
     char data_fifo[64] = {};
 
-    set_datafifo_name(pid, data_fifo);
+    sprintf(data_fifo, "DATA_FIFO_%d", pid);
     PRINTF("name: %s\n", data_fifo);
 
     if(mkfifo(data_fifo, PERM_MASK) < 0) {
@@ -113,7 +111,8 @@ void client() {
         exit(EXIT_FAILURE);
     }
 
-    int srv_fifo_fd = open_service_fifo(O_WRONLY); // O_WRONLY ?? O_RDWR
+    int srv_fifo_fd = open_service_fifo(O_WRONLY);
+
     PRINTF("opened service in client\n");
     send_namecode(pid, srv_fifo_fd);
     PRINTF("wrote pid\n");
@@ -185,8 +184,4 @@ int get_namecode(int serv_fifo_fd) {
     }
 
     return namecode;
-}
-
-void set_datafifo_name(pid_t pid, char* datafifo) {
-    sprintf(datafifo, "DATA_FIFO_%d", pid);
 }
