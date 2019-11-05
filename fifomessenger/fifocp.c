@@ -8,8 +8,6 @@
 #include <assert.h>
 #include <sys/ioctl.h>
 
-#define _DEBUG
-
 #define PERM_MASK 0644
 #define BUF_SIZE PIPE_BUF
 #define TIME_LIMIT 2
