@@ -9,9 +9,16 @@
 #ifdef _DEBUG
 #define PRINTF printf
 #define FFLUSH fflush(stdout);
+#define GETCHAR getchar
 #else
 #define PRINTF
 #define FFLUSH
+#define GETCHAR
+#endif
+
+#ifdef _DEBUG
+int fd = 0;
+#define STDOUT_FILENO fd
 #endif
 
 #define BUFCAPACITY 512
@@ -38,6 +45,10 @@ int main(int argc, char* argv[]) {
         perror("");
         exit(EXIT_FAILURE);
     }
+
+#ifdef _DEBUG
+    fd = open("out", O_RDWR);
+#endif
 
     sigset_t set;
     sigemptyset(&set);
@@ -175,7 +186,7 @@ void child(char* datapath) { // child process
         ASSERT(data_read, readed >= 0)
 
         for(int byte = 0; byte < readed; byte++) {
-            for(int bit = 7; bit >= 0; bit--){
+            for(int bit = 7; bit >= 0; bit--) {
                 while(!g_catched) {
                     alarm(1U);
                     sigsuspend(&set);
