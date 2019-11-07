@@ -87,7 +87,7 @@ void flush(int nbytes) {
 
 //=============HANDLERS=============//
 char g_catched = 0;   // for child:
-                      // 0 - parent isn't g_catched to take bit as signal, 1 - parent is g_catched
+                      // 0 - parent isn't ready to take bit as signal, 1 - parent is ready
                       // for parent:
                       // 1 - received SIGUSR1 or SIGUSR2, 2 - recieved SIGTSTP from child, 0 - received another signal
 
