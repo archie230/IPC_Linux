@@ -16,11 +16,6 @@
 #define GETCHAR
 #endif
 
-#ifdef _DEBUG
-int fd = 0;
-#define STDOUT_FILENO fd
-#endif
-
 #define BUFCAPACITY 512
 u_char    g_byte             = 0;
 u_char    g_bitpos           = 0;
@@ -46,10 +41,6 @@ int main(int argc, char* argv[]) {
         exit(EXIT_FAILURE);
     }
 
-#ifdef _DEBUG
-    fd = open("out", O_RDWR);
-#endif
-
     sigset_t set;
     sigemptyset(&set);
     sigaddset(&set, SIGUSR1);
@@ -57,12 +48,27 @@ int main(int argc, char* argv[]) {
     sigaddset(&set, SIGTSTP);
     ASSERT(sigprocmask,sigprocmask(SIG_BLOCK, &set, NULL) >= 0)
 
+// setting handlers
     struct sigaction sa = {0};
     sa.sa_handler = SIGCHLD_handler;
     sa.sa_flags = SA_NOCLDSTOP | SA_NOCLDWAIT;
     ASSERT(sigaction, sigaction(SIGCHLD, &sa, NULL) >= 0)
 
+    sa.sa_handler = bit_handler;
+    sa.sa_flags = 0;
+    ASSERT(sigaction, sigaction(SIGUSR1, &sa, 0) >= 0)
+    ASSERT(sigaction, sigaction(SIGUSR2, &sa, 0) >= 0)
+
+    sa.sa_handler = empty_handler;
+    ASSERT(sigaction, sigaction(SIGALRM, &sa, NULL) >= 0)
+
+    sigemptyset(&sa.sa_mask);
+    sigaddset(&sa.sa_mask, SIGCHLD);
+    sa.sa_handler = parentSIGTSTP_handler;
+    ASSERT(sigaction, sigaction(SIGTSTP, &sa, 0) >= 0)  //setting SIGTSTP handler SIGCHLD blocking
+//
     pid_t pid = fork();
+
     switch(pid) {
         case 0:
             child(argv[1]);
@@ -73,8 +79,6 @@ int main(int argc, char* argv[]) {
             exit(EXIT_FAILURE);
 
         default:
-            PRINTF("child: %d", pid);
-            FFLUSH
             parent(pid);
     }
     return 0;
@@ -102,7 +106,7 @@ void bit_handler(int signal) {
         g_byte &= ~(0x80U >> g_bitpos);
 
     if(signal == SIGUSR2)
-        g_byte |= (0x80U >> g_bitpos);
+        g_byte |=  (0x80U >> g_bitpos);
 
     g_bitpos++;
     g_catched = 1;
@@ -124,22 +128,16 @@ void parentSIGTSTP_handler(int signal) {
 //==================================//
 
 void parent(pid_t cpid) {
-    struct sigaction sa = {0};
     sigset_t empty_set;
     sigemptyset(&empty_set);
 
-    sa.sa_handler = bit_handler;
-    ASSERT(sigaction, sigaction(SIGUSR1, &sa, 0) >= 0)
-    ASSERT(sigaction, sigaction(SIGUSR2, &sa, 0) >= 0)
-
-    sigemptyset(&sa.sa_mask);
-    sigaddset(&sa.sa_mask, SIGCHLD);
-    sa.sa_handler = parentSIGTSTP_handler;
-    ASSERT(sigaction, sigaction(SIGTSTP, &sa, 0) >= 0)  //setting SIGTSTP handler SIGCHLD blocking
-
     while(1) {
-        kill(cpid, SIGTSTP);
-        sigsuspend(&empty_set);
+        while((g_catched != 1) && (g_catched != 2)) {
+            alarm(1U);
+            sigsuspend(&empty_set);
+            alarm(0);
+        }
+
         switch(g_catched) {
             case 1:
                 if(g_bitpos == 8) {
@@ -149,11 +147,14 @@ void parent(pid_t cpid) {
                         flush(BUFCAPACITY);
                     g_bitpos = 0;
                 }
+                kill(cpid, SIGTSTP);
+                g_catched = 0;
                 break;
             case 2:
+                g_catched = 0;
                 goto out;
             default:
-                fprintf(stderr, "caught bad signal in parent");
+                fprintf(stderr, "smth went wrong...");
                 fflush(stderr);
                 exit(EXIT_FAILURE);
         }
@@ -168,11 +169,8 @@ void child(char* datapath) { // child process
     sa.sa_handler = childSIGTSTP_handler;
     ASSERT(sigaction, sigaction(SIGTSTP, &sa, NULL) >= 0)
 
-    sa.sa_handler = empty_handler;
-    ASSERT(sigaction, sigaction(SIGALRM, &sa, NULL) >= 0)
-
-    sigset_t set;
-    sigemptyset(&set);
+    sigset_t empty_set;
+    sigemptyset(&empty_set);
 
     int fd = open(datapath, O_RDONLY);
     ASSERT(datapath_open, fd > 0)
@@ -187,9 +185,14 @@ void child(char* datapath) { // child process
 
         for(int byte = 0; byte < readed; byte++) {
             for(int bit = 7; bit >= 0; bit--) {
+                if((g_buf[byte] >> bit) & 1U)
+                    kill(ppid, SIGUSR2);
+                else
+                    kill(ppid, SIGUSR1);
+
                 while(!g_catched) {
                     alarm(1U);
-                    sigsuspend(&set);
+                    sigsuspend(&empty_set);
                     alarm(0);
 
                     if(ppid != getppid()) {
@@ -198,29 +201,11 @@ void child(char* datapath) { // child process
                         exit(EXIT_FAILURE);
                     }
                 } g_catched = 0;
-
-                if((g_buf[byte] >> bit) & 1U) {
-                    kill(ppid, SIGUSR2);
-                }
-                else {
-                    kill(ppid, SIGUSR1);
-                }
             }
         }
 
     } while(readed == BUFCAPACITY);
 
-    while(!g_catched) {
-        alarm(1U);
-        sigsuspend(&set);
-        alarm(0);
-
-        if(ppid != getppid()) {
-            fprintf(stderr, "parent dead");
-            fflush(stderr);
-            exit(EXIT_FAILURE);
-        }
-    } g_catched = 0;
     kill(ppid, SIGTSTP);
     close(fd);
 
