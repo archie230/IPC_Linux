@@ -85,7 +85,7 @@ int main(int argc, const char* argv[]) {
                                                     _status;})
 
 #ifdef _DEBUG
-#define KILL_ME do {printf("KILL ME"); getchar();} while(0);
+#define KILL_ME do {printf("KILL ME DADDY!\n"); getchar();} while(0);
 #else
 #define KILL_ME
 #endif
@@ -94,7 +94,7 @@ int main(int argc, const char* argv[]) {
 int producer(const char* data, int semid, void* shm_ptr) {
     int data_fd = open(data, O_RDONLY);
     if(data_fd < 0) {
-        perror("data file open");
+        perror("data file opening");
         return -1;
     }
 
@@ -105,11 +105,13 @@ int producer(const char* data, int semid, void* shm_ptr) {
     SEMOP_PUSH(CONSUMER_BUISNESS, 0, 0);
     SEMOP_PUSH(PRODUCER_BUISNESS, 2, SEM_UNDO);
     SEMOP_PUSH(PRODUCER_BUISNESS, -1, 0);
-    SEMOP_POPA();
+    SEMOP_POPA();   // critical for connection
 
     SEMOP_PUSH(CONSUMER_BUISNESS, -1, 0);
     SEMOP_PUSH(CONSUMER_BUISNESS, 0, 0);
     SEMOP_PUSH(CONSUMER_BUISNESS,1, 0);
+    SEMOP_PUSH(DATA, 1, SEM_UNDO);
+    SEMOP_PUSH(DATA, -1, 0);
     SEMOP_POPA();
 
     int32_t readed = 0;
@@ -120,32 +122,34 @@ int producer(const char* data, int semid, void* shm_ptr) {
         SEMOP_PUSH(DATA, 0, 0);
         SEMOP_PUSH(MUTEX, 0, 0);
         SEMOP_PUSH(MUTEX, 1, SEM_UNDO);
-        if(SEMOP_POPA() < 0) {
+        if(SEMOP_POPA() < 0) { // critical for shmem
             perror("consumer zdoh");
             return -1;
         }
 
         readed = read(data_fd, shm_ptr + sizeof(int32_t), shm_sz - sizeof(int32_t));
         if(readed < 0) {
-            perror("data file read");
+            perror("data file reading");
             return -1;
         }
 
         *((int32_t*) shm_ptr) = readed;
 
+        KILL_ME
         SEMOP_PUSH(DATA, 1, 0);
         SEMOP_PUSH(MUTEX, -1, SEM_UNDO);
         SEMOP_PUSH(MUTEX, 0 , 0);
-        if(SEMOP_POPA() < 0) {
-            perror("someone has changed mutex semaphore!");
+        if(SEMOP_POPA() < 0) { // end critical for shmem
+            perror("someone changed mutex semaphore!");
             return -1;
         }
-        KILL_ME
     } while(readed != 0);
 
     SEMOP_PUSH(CONSUMER_BUISNESS, 0, 0);
     SEMOP_PUSH(PRODUCER_BUISNESS, -2, SEM_UNDO);
-    SEMOP_POPA();
+    SEMOP_PUSH(DATA, 1, 0);
+    SEMOP_PUSH(DATA, -1, SEM_UNDO); // restore DATA adjustment for 0
+    SEMOP_POPA();   // end critical for connection
 
     return 0;
 }
@@ -160,11 +164,10 @@ int consumer(int semid, void* shm_ptr) {
     SEMOP_PUSH(CONSUMER_BUISNESS, 0 , 0);
     SEMOP_PUSH(CONSUMER_BUISNESS, 1, SEM_UNDO);
     SEMOP_PUSH(DATA, 1, SEM_UNDO);
-    SEMOP_PUSH(DATA, -1, SEM_UNDO);
+    SEMOP_PUSH(DATA, -1, 0);
     SEMOP_POPA();
 
-    int32_t readed = 0;
-
+    int32_t read = 0;
     do {
         KILL_ME
         SEMOP_PUSH(PRODUCER_BUISNESS, -2, IPC_NOWAIT);
@@ -179,13 +182,13 @@ int consumer(int semid, void* shm_ptr) {
             return -1;
         }
 
-        readed = *((int32_t*) shm_ptr);
-        if(readed < 0) {
+        read = *((int32_t*) shm_ptr);
+        if(read < 0) {
             perror("producer ploho napisal");
             return -1;
         }
 
-        if(write(STDOUT_FILENO, shm_ptr + sizeof(int32_t), readed) < 0) {
+        if(write(STDOUT_FILENO, shm_ptr + sizeof(int32_t), read) < 0) {
             perror("write");
             exit(EXIT_FAILURE);
         }
@@ -196,9 +199,11 @@ int consumer(int semid, void* shm_ptr) {
             perror("MUTEX semaphore isporchen");
             return -1;
         }
-    } while(readed > 0);
+    } while(read > 0);
 
     SEMOP_PUSH(CONSUMER_BUISNESS, -1, SEM_UNDO);
+    SEMOP_PUSH(DATA, 1, 0);
+    SEMOP_PUSH(DATA, -1, SEM_UNDO); // restore DATA adjustment for 0
     SEMOP_POPA();
 
     return 0;
