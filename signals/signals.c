@@ -41,13 +41,6 @@ int main(int argc, char* argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    sigset_t set;
-    sigemptyset(&set);
-    sigaddset(&set, SIGUSR1);
-    sigaddset(&set, SIGUSR2);
-    sigaddset(&set, SIGTSTP);
-    ASSERT(sigprocmask,sigprocmask(SIG_BLOCK, &set, NULL) >= 0)
-
 // setting handlers
     struct sigaction sa = {0};
     sa.sa_handler = SIGCHLD_handler;
@@ -68,6 +61,18 @@ int main(int argc, char* argv[]) {
     ASSERT(sigaction, sigaction(SIGTSTP, &sa, 0) >= 0)  //setting SIGTSTP handler SIGCHLD blocking
 //
     pid_t pid = fork();
+
+    sigset_t set;
+    sigemptyset(&set);
+    sigaddset(&set, SIGUSR1);
+    sigaddset(&set, SIGUSR2);
+    sigaddset(&set, SIGTSTP);
+    ASSERT(sigprocmask,sigprocmask(SIG_BLOCK, &set, NULL) >= 0)
+
+#ifdef _DEBUG
+    if(pid != 0)
+        sleep(3);
+#endif
 
     switch(pid) {
         case 0:
@@ -90,10 +95,10 @@ void flush(int nbytes) {
 }
 
 //=============HANDLERS=============//
-char g_catched = 0;   // for child:
-                      // 0 - parent isn't ready to take bit as signal, 1 - parent is ready
-                      // for parent:
-                      // 1 - received SIGUSR1 or SIGUSR2, 2 - recieved SIGTSTP from child, 0 - received another signal
+volatile sig_atomic_t g_catched = 0;// for child:
+                                    // 0 - parent isn't ready to take bit as signal, 1 - parent is ready
+                                    // for parent:
+                                    // 1 - received SIGUSR1 or SIGUSR2, 2 - recieved SIGTSTP from child, 0 - received another signal
 
 void SIGCHLD_handler(int signal) {
     fprintf(stderr, "child dead");
@@ -132,11 +137,10 @@ void parent(pid_t cpid) {
     sigemptyset(&empty_set);
 
     while(1) {
-        while((g_catched != 1) && (g_catched != 2)) {
-            alarm(1U);
-            sigsuspend(&empty_set);
-            alarm(0);
-        }
+        // если убрать эту проверку и если sigprocmask после форка,
+        // то может произойти deadlock
+        while((g_catched != 1) && (g_catched != 2))
+            sigsuspend(&empty_set); // critical 1 start ; resource : g_buf (HANDLER AND LOOP FOR BUFF)
 
         switch(g_catched) {
             case 1:
@@ -147,17 +151,17 @@ void parent(pid_t cpid) {
                         flush(BUFCAPACITY);
                     g_bitpos = 0;
                 }
-                kill(cpid, SIGTSTP);
+                kill(cpid, SIGTSTP);    // critical 1 end
                 g_catched = 0;
                 break;
             case 2:
                 g_catched = 0;
                 goto out;
             default:
-                fprintf(stderr, "smth went wrong...");
+                fprintf(stderr, "bad g_catched value");
                 fflush(stderr);
                 exit(EXIT_FAILURE);
-        }
+            }
     }
     out:
         wait(NULL);
@@ -177,7 +181,7 @@ void child(char* datapath) { // child process
 
     int readed = 0;
     pid_t ppid = getppid();
-    g_catched   = 0;
+    g_catched  = 0;
 
     do {
         readed = read(fd, g_buf, BUFCAPACITY);
@@ -186,13 +190,13 @@ void child(char* datapath) { // child process
         for(int byte = 0; byte < readed; byte++) {
             for(int bit = 7; bit >= 0; bit--) {
                 if((g_buf[byte] >> bit) & 1U)
-                    kill(ppid, SIGUSR2);
+                    kill(ppid, SIGUSR2);        // critical 2 end
                 else
-                    kill(ppid, SIGUSR1);
+                    kill(ppid, SIGUSR1);        // critical 2 end
 
                 while(!g_catched) {
-                    alarm(1U);
-                    sigsuspend(&empty_set);
+                    alarm(1U);          // race
+                    sigsuspend(&empty_set);     // critical 2 start ; resource : parent
                     alarm(0);
 
                     if(ppid != getppid()) {
