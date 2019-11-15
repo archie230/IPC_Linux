@@ -105,7 +105,7 @@ int producer(const char* data, int semid, void* shm_ptr) {
     SEMOP_PUSH(CONSUMER_BUISNESS, 0, 0);
     SEMOP_PUSH(PRODUCER_BUISNESS, 2, SEM_UNDO);
     SEMOP_PUSH(PRODUCER_BUISNESS, -1, 0);
-    SEMOP_POPA();   // critical for connection
+    SEMOP_POPA(); // critical ; resource: consumer
 
     SEMOP_PUSH(CONSUMER_BUISNESS, -1, 0);
     SEMOP_PUSH(CONSUMER_BUISNESS, 0, 0);
@@ -114,7 +114,7 @@ int producer(const char* data, int semid, void* shm_ptr) {
     SEMOP_PUSH(DATA, -1, 0);
     SEMOP_POPA();
 
-    int32_t readed = 0;
+    int32_t bytes_read = 0;
     do {
         SEMOP_PUSH(CONSUMER_BUISNESS, -1, IPC_NOWAIT);
         SEMOP_PUSH(CONSUMER_BUISNESS, 0, IPC_NOWAIT);
@@ -122,34 +122,34 @@ int producer(const char* data, int semid, void* shm_ptr) {
         SEMOP_PUSH(DATA, 0, 0);
         SEMOP_PUSH(MUTEX, 0, 0);
         SEMOP_PUSH(MUTEX, 1, SEM_UNDO);
-        if(SEMOP_POPA() < 0) { // critical for shmem
+        if(SEMOP_POPA() < 0) { // critical ; resource: shmem
             perror("consumer zdoh");
             return -1;
         }
 
-        readed = read(data_fd, shm_ptr + sizeof(int32_t), shm_sz - sizeof(int32_t));
-        if(readed < 0) {
+        bytes_read = read(data_fd, shm_ptr + sizeof(int32_t), shm_sz - sizeof(int32_t));
+        if(bytes_read < 0) {
             perror("data file reading");
             return -1;
         }
 
-        *((int32_t*) shm_ptr) = readed;
+        *((int32_t*) shm_ptr) = bytes_read;
 
         KILL_ME
         SEMOP_PUSH(DATA, 1, 0);
         SEMOP_PUSH(MUTEX, -1, SEM_UNDO);
-        SEMOP_PUSH(MUTEX, 0 , 0);
-        if(SEMOP_POPA() < 0) { // end critical for shmem
+        SEMOP_PUSH(MUTEX, 0, IPC_NOWAIT);
+        if(SEMOP_POPA() < 0) { // end critical ; resource: shmem
             perror("someone changed mutex semaphore!");
             return -1;
         }
-    } while(readed != 0);
+    } while(bytes_read != 0);
 
     SEMOP_PUSH(CONSUMER_BUISNESS, 0, 0);
     SEMOP_PUSH(PRODUCER_BUISNESS, -2, SEM_UNDO);
     SEMOP_PUSH(DATA, 1, 0);
     SEMOP_PUSH(DATA, -1, SEM_UNDO); // restore DATA adjustment for 0
-    SEMOP_POPA();   // end critical for connection
+    SEMOP_POPA();   // end critical ; resource: consumer
 
     return 0;
 }
@@ -163,9 +163,7 @@ int consumer(int semid, void* shm_ptr) {
     SEMOP_PUSH(PRODUCER_BUISNESS, 2, 0);
     SEMOP_PUSH(CONSUMER_BUISNESS, 0 , 0);
     SEMOP_PUSH(CONSUMER_BUISNESS, 1, SEM_UNDO);
-    SEMOP_PUSH(DATA, 1, SEM_UNDO);
-    SEMOP_PUSH(DATA, -1, 0);
-    SEMOP_POPA();
+    SEMOP_POPA(); // critical ; resource : producer
 
     int32_t read = 0;
     do {
@@ -177,7 +175,7 @@ int consumer(int semid, void* shm_ptr) {
         SEMOP_PUSH(DATA, 0, IPC_NOWAIT);
         SEMOP_PUSH(MUTEX, 0, 0);
         SEMOP_PUSH(MUTEX, 1, SEM_UNDO);
-        if(SEMOP_POPA() < 0) {
+        if(SEMOP_POPA() < 0) { // critical ; resource : shmem
             perror("producer zdoh");
             return -1;
         }
@@ -195,16 +193,14 @@ int consumer(int semid, void* shm_ptr) {
 
         SEMOP_PUSH(MUTEX, -1, SEM_UNDO);
         SEMOP_PUSH(MUTEX, 0, IPC_NOWAIT);
-        if(SEMOP_POPA() < 0) {
+        if(SEMOP_POPA() < 0) { // critical end ; resource shmem
             perror("MUTEX semaphore isporchen");
             return -1;
         }
     } while(read > 0);
 
     SEMOP_PUSH(CONSUMER_BUISNESS, -1, SEM_UNDO);
-    SEMOP_PUSH(DATA, 1, 0);
-    SEMOP_PUSH(DATA, -1, SEM_UNDO); // restore DATA adjustment for 0
-    SEMOP_POPA();
+    SEMOP_POPA();  // critical end ; resource producer
 
     return 0;
 }
