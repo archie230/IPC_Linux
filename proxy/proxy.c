@@ -183,6 +183,7 @@ int create_connections(int con_sz, connection_t* con_buf, int* child_fds, int Fi
 
             default:
                 PRINTF("%d ", pid);
+                FFLUSH
                 close(fds1[0]);
                 close(fds2[1]);
                 fcntl(fds1[1], F_SETFL, O_WRONLY | O_NONBLOCK);
