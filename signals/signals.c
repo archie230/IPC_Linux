@@ -138,7 +138,7 @@ void parent(pid_t cpid) {
 
     while(1) {
         // если убрать эту проверку и если sigprocmask после форка,
-        // то может произойти deadlock
+        // то deadlock
         while((g_catched != 1) && (g_catched != 2))
             sigsuspend(&empty_set); // critical 1 start ; resource : g_buf (HANDLER AND LOOP FOR BUFF)
 
