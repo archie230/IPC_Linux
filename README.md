@@ -5,21 +5,21 @@ Write two programs, which have no parent-child relationship(i.e. one
 of them doesn't `fork` and `execve` another when executed), and can be
 executed in arbitrary order from different terminals.
 
-***Producer*** process opens, reads the file and passes it to ***consumer*** via
-**FIFO**, then ***consumer*** prints file contents to the screen.
+***Server*** process opens, reads the file and passes it to ***Client*** via
+**FIFO**, then ***Client*** prints file contents to the screen.
 
 ***Requirements:***
 0. Deadlocks are prohibited.
-1. There can be arbitrary number of ***producers*** and ***consumers***.
+1. There can be arbitrary number of ***Servers*** and ***CLients***.
 2. Usage of file locks, semaphores, signals(even handling) and other
 communication and synchronization facilities but FIFO is not permitted.
 3. Since no blocking synchronization syscalls must be present in
 the program, one busy wait is allowed.
-4. If after having a handshake ***producer*** or ***consumer*** dies, his
-***partner*** should die too, and other ***producers***/***consumers*** should
+4. If after having a handshake ***Server*** or ***Client*** dies, his
+***partner*** should die too, and other ***Servers***/***Clients*** should
 not be prevented from transmitting/receiving.
 5. If both ***partners*** die simultaneously(e.g. computer resets),
-other ***producers***/***consumers*** should continue transmitting/receiving.
+other ***Servers***/***Clients*** should continue transmitting/receiving.
 
 ## Task 2. msgqueue
 
