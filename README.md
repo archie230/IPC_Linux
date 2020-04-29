@@ -30,7 +30,7 @@ Then, after all of them are born, they print their numbers(in order of appearenc
 must be removed after the program is executed.
 
 
-## Task 3. Shared memory and semaphores.
+## Task 3. shmem
 Write two programs, which have no parent-child relationship(i.e. one
 of them doesn't `fork` and `execve` another when executed), and can be
 executed in arbitrary order from different terminals.
