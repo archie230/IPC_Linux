@@ -8,6 +8,16 @@ executed in arbitrary order from different terminals.
 ***Server*** process opens, reads the file and passes it to ***Client*** via
 **FIFO**, then ***Client*** prints file contents to the screen.
 
+***Run:***
+```sh
+cd fifomessenger
+make
+# Server:
+./fifocp filename
+# Client
+./fifocp
+```
+
 ***Requirements:***
 0. Deadlocks are prohibited.
 1. There can be arbitrary number of ***Servers*** and ***CLients***.
@@ -29,6 +39,12 @@ Then, after all of them are born, they print their numbers(in order of appearenc
 3. Only System V IPC message queues are allowed to be used. The queue
 must be removed after the program is executed.
 
+***Run:***
+```sh
+cd msgqueue
+make
+./msg 123 # any kids number
+```
 
 ## Task 3. shmem
 Write two programs, which have no parent-child relationship(i.e. one
@@ -37,6 +53,16 @@ executed in arbitrary order from different terminals.
 
 ***Producer*** program opens, reads the file and passes it to ***consumer*** via
 **shared memory**, then ***consumer*** prints file contents to the screen.
+
+***Run:***
+```sh
+cd shmem
+make shmem
+# Producer:
+./bin/shmem filename
+# Consumer:
+./bin/shmem
+```
 
 ***Requirements:***
 0. Deadlocks are prohibited.
@@ -54,6 +80,14 @@ Write program that produces child.
 Then child process opens file and transmits its contents to the parent. Parent
 prints them to the screen.
 
+
+***Run:***
+```sh
+cd signals
+make 
+./bin/signals filename
+```
+
 ***Requirements:***
 1. Only UNIX signals `SIGUSR1`, `SIGUSR2` are allowed to be used.
 2. If one of interlocutors dies, another should die too.
@@ -69,6 +103,13 @@ receives it back in buffer #1 and so on.
 
 The point is that the size of ***parent`s*** buffers decreases as the file contents goes towards the final
 destination - ***slave*** #N, which prints what it receives to the screen.
+
+***Run:***
+```sh
+cd proxy
+make 
+./bin/proxy filename
+```
 
 ***Requirements:***
 1. Only **pipes** and `select()` syscall are allowed to be used as the communication and
