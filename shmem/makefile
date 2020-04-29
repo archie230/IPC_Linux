@@ -12,5 +12,5 @@ check_sem:
 delete_resource:
 	gcc -Wall delete_resource.c -o bin/delete_resource
 
-clear:
+clean:
 	rm -rf bin/*

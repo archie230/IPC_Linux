@@ -9,5 +9,5 @@ tests:
 debug:
 	cc -g -Wall -D _DEBUG proxy.c -lm -o bin/debug
 
-clear:
+clean:
 	rm -r bin/*
