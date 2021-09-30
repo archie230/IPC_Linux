@@ -1,4 +1,4 @@
-# MIPT 3rd semester CS course
+# Studying the mechanisms of inter-process communication in UNIX systems
 
 ## Task 1. fifomessenger
 Write two programs, which have no parent-child relationship(i.e. one
